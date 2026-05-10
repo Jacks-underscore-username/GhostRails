@@ -1,0 +1,27 @@
+on: push
+name: Publish
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Package mod
+      run: |
+        VERSION=$(jq -r .version info.json)
+        mkdir -p "ghost-rails_${VERSION}"
+        rsync -a --exclude=".git" --exclude=".github" --exclude="ghost-rails_${VERSION}.zip" --exclude="ghost-rails_${VERSION}" . "ghost-rails_${VERSION}/"
+        zip -r "ghost-rails_${VERSION}.zip" "ghost-rails_${VERSION}"
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+    - name: Upload to Factorio Mod Portal
+      run: |
+        INIT_RESPONSE=$(curl -sS \
+          -H "Authorization: Bearer ${{ secrets.FACTORIO_API_KEY }}" \
+          --data-urlencode "mod=ghost-rails" \
+          "https://mods.factorio.com/api/v2/mods/releases/init_upload")
+        echo "init_upload response: $INIT_RESPONSE"
+        UPLOAD_URL=$(echo "$INIT_RESPONSE" | jq -r .upload_url)
+        FINISH_RESPONSE=$(curl -sS \
+          -F "file=@ghost-rails_${VERSION}.zip" \
+          "$UPLOAD_URL")
+        echo "finish_upload response: $FINISH_RESPONSE"
+        echo "$FINISH_RESPONSE" | jq -e .success
